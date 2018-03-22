@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            body {
+                box-sizing: border-box;
+                font-family: 'Roboto Sans', sans-serif;
+            }
+            h1,h2,h3,h4,h5,h6 {
+                font-weight: 100;
+            }
+
+        </style>
+        <title>Metronome</title>
+
+    </head>
+    <body>
+        <h1>Metronome</h1>
+        <canvas id="dotcanvas" width="200" height="50"></canvas>
+        <h3 id="tempo-disp"></h3>
+        <button id="tempo-inc">+</button>
+        <button id="tempo-dec">-</button>
+        <div>
+            <button id="start">Start</button>
+        </div>
+
+        <script>
+            function ready(fn) {
+                document.addEventListener('DOMContentLoaded', function(evt) {
+                    fn()
+                });
+            }
+            // support for high-resolution screens
+            function setupcanvas(cvs) {
+                ctx = cvs.getContext('2d')
+                var ratio = window.devicePixelRatio || 1
+                if (ratio !== 1) {
+                    var oW = cvs.width
+                    var oH = cvs.height
+                    cvs.width = ratio*oW
+                    cvs.height = ratio*oH
+                    cvs.style.width = oW+'px'
+                    cvs.style.height = oH+'px'
+                    ctx.scale(ratio,ratio)
+                }
+            }
+            // draw the visualization
+            function updatecanvas(running, beat) {
+                var cvs = document.getElementById('dotcanvas')
+                ctx = cvs.getContext('2d')
+                ctx.clearRect(0, 0, cvs.clientWidth, cvs.clientHeight)
+                ctx.fillStyle = '#fff'
+                ctx.strokeStyle = '#000'
+                ctx.fillRect(0, 0, cvs.clientWidth, cvs.clientHeight)
+                for(var i = 0; i < 4; i++) {
+                    ctx.save()
+                    ctx.strokeStyle = '#000'
+                    ctx.translate(i*cvs.clientWidth/4, 0)
+                    ctx.beginPath()
+                    ctx.arc(25, 25, 10, 0, 2*Math.PI)
+                    ctx.closePath()
+                    ctx.stroke()
+                    if (running && beat % 4 === i) {
+                        ctx.fillStyle = '#f00'
+                        ctx.fill()
+                    }
+                    ctx.restore()
+                }
+            }
+            ready(function() {
+                setupcanvas(document.getElementById('dotcanvas'))          
+                updatecanvas(0)
+                var AudioContext = window.AudioContext || window.webkitAudioContext
+                var ctx = new AudioContext()
+                var gain = ctx.createGain()
+                var beat = 0
+                var tempo = 120.
+                var nextNoteTime = 0.0
+                var lookahead = .100
+                var running = false
+
+                gain.connect(ctx.destination)
+
+                var tempoDisplay = document.getElementById('tempo-disp')
+                tempoDisplay.innerText = tempo
+                var tempoIncBtn = document.getElementById('tempo-inc')
+                tempoIncBtn.addEventListener('click', function(evt) {
+                    evt.preventDefault()
+                    tempo += 1.0
+                    tempoDisplay.innerText = tempo
+                })
+                tempoDecBtn = document.getElementById('tempo-dec')
+                tempoDecBtn.addEventListener('click', function(evt) {
+                    evt.preventDefault()
+                    tempo -= 1.0
+                    tempoDisplay.innerText = tempo
+                })
+                startBtn = document.getElementById('start')
+                startBtn.addEventListener('click', function(evt) {
+                    if (running) {
+                        ctx.suspend()
+                        running = false
+                        startBtn.innerText = 'Start'
+                    } else {
+                        // Important! On mobile browsers, you can only
+                        // resume (start) the audio context in response
+                        // to a user-initiated event like a button click
+                        ctx.resume()
+                        running = true
+                        nextNoteTime = ctx.currentTime
+                        beat = 0
+                        startBtn.innerText = 'Stop'
+
+                    }
+                })
+                /**
+                 * @param AudioContext ctx - The AudioContext
+                 * @param AudioNode dest - The destination node
+                 * @param float time - When should the beep happen in `ctx`s timeline?
+                 * @param boolean high - Is this a 'high' (beginning of bar) beep?
+                 */
+                function beep(ctx, dest, time, high) {
+                    var osc = ctx.createOscillator()
+                    var gain = ctx.createGain()
+                    
+                    var endT = time + 60.0/tempo/2.0
+
+                    osc.connect(gain)
+                    // use the gain node as an envelope to give us a little
+                    // 30 millisecond attack and then fade out to silence to avoid
+                    // a discontinuity at the end of the note
+                    gain.gain.setValueAtTime(1.0, time)
+                    gain.gain.linearRampToValueAtTime(0.6, time + .030)
+                    gain.gain.linearRampToValueAtTime(0.0001, endT)
+                    gain.connect(dest)
+                    osc.frequency.setValueAtTime(high ? 880.0 : 440.0, time)            
+                    osc.start(time)
+                    osc.stop(endT)
+                }
+                setInterval(function() {
+                    // we use a lookahead scheme to schedule the metronome's beats
+                    // see https://www.html5rocks.com/en/tutorials/audio/scheduling/
+                    // for an in-depth explanation.
+                    //
+                    // Note we do this in a while loop to handle the case where multiple
+                    // notes need to be scheduled in the lookahead window, e.g.,
+                    // at very high tempos
+                    var scheduled = 0
+                    var cTime = ctx.currentTime
+                    while(running && nextNoteTime < cTime + lookahead) {
+                        beep(ctx, gain, nextNoteTime, beat % 4 === 0)
+                        updatecanvas(running, beat)
+                        nextNoteTime = nextNoteTime + 60.0/tempo
+                        beat++
+                        scheduled++
+                    }
+
+                    if (scheduled > 1) {
+                        console.log('scheduled', scheduled)
+                    }
+                }, 25)
+            })
+        </script>
+    </body>
+</html>
