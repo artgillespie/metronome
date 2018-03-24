@@ -1,221 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-body {
-    box-sizing: border-box;
-    font-family: 'Roboto Sans', sans-serif;
-}
-            h1,h2,h3,h4,h5,h6 {
-                font-weight: 100;
-            }
-        </style>
-        <title>Metronome</title>
 
-    </head>
-    <body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            box-sizing: border-box;
+            display: flex;
+            color: #536878;
+            font-family:   
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                "Roboto",
+                "Helvetica Neue", Arial, sans-serif,
+                "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            justify-content: center;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            color: inherit;
+            font-weight: 100;
+        }
+        body {
+            display: flex;
+            justify-content: center;
+        }
+        .ctr {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            width: 600px;
+        }
+        button {
+            border-radius: 8px;
+            border-color: #536878;
+            color: inherit;
+            height: 48px;
+            min-width: 48px;
+            font-size: 28px;
+            font-weight: 200;
+        }
+        button:focus { outline: 0; }
+        button.icn {
+            align-items: center;
+            display: flex;
+            justify-content: center;
+            padding: 0;
+        }
+        .tempo-ctl {
+            align-items: center;
+            display: flex;
+            margin: 16px 0 16px 0;
+        }
+        #tempo-disp {
+            margin: 0px 16px 0px 16px;
+        }
+
+        @media only screen and (max-width: 400px) {
+            .ctr {
+                width: 100%;
+            }
+        }
+    </style>
+    <title>Metronome</title>
+
+</head>
+
+<body>
+
+    <div class="ctr">
         <h1>Metronome</h1>
         <canvas id="dotcanvas" width="200" height="50"></canvas>
-        <h3 id="tempo-disp"></h3>
-        <button id="tempo-inc">+</button>
-        <button id="tempo-dec">-</button>
-        <div>
-            <button id="start">Start</button>
+        <div class="tempo-ctl">
+            <button class="btn" id="tempo-dec">-</button>
+            <h1 id="tempo-disp"></h1>
+            <button class="btn" id="tempo-inc">+</button>
         </div>
+        <div>
+            <button class="icn" id="start">
+                <svg width="24" height="24">
+                        <rect id="icn-stp" x="0" y="0" width="24" height="24" fill="#536878" style="display: none;"/> 
+                        <polygon id="icn-sta" points="0 0 24 12 0 24 0 0" fill="#536878" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <script src="/index.js">
+    </script>
+</body>
 
-        <script>
-            function elid(id) { return document.getElementById(id) }
-            function elevt(el, evt, fn) { el.addEventListener(evt, fn); return fn }
-            function elclick(el, fn) { return elevt(el, 'click', fn) }
-            function elhold(el, fn) {
-                function _h(devt, uevt) { 
-                    elevt(el, devt, function mdl(e) {
-                        e.preventDefault()
-                        fn()
-                        var t = setTimeout(function c() {
-                            fn()
-                            t = setTimeout(c, 100)
-                        }, 500)
-                        elevt(el, uevt, function mul(e) {
-                            e.preventDefault()
-                            clearTimeout(t)
-                            el.removeEventListener('mouseup', mul)
-                        })
-                    })
-                }
-                // todo: detect which platform we're on?
-                _h('mousedown', 'mouseup')
-                _h('touchstart', 'touchend')
-            }
-            function ready(fn) { elevt(document, 'DOMContentLoaded', fn) }
-
-            // support for high-resolution screens
-            function setupcanvas(cvs) {
-                ctx = cvs.getContext('2d')
-                var ratio = window.devicePixelRatio || 1
-                if (ratio !== 1) {
-                    var oW = cvs.width
-                    var oH = cvs.height
-                    cvs.width = ratio*oW
-                    cvs.height = ratio*oH
-                    cvs.style.width = oW+'px'
-                    cvs.style.height = oH+'px'
-                    ctx.scale(ratio,ratio)
-                }
-            }
-
-            function dotanimation(time, dur, fn) {
-                return function tick(t) {
-                    var dt = t - time;
-                    if (dt >= dur) {
-                        return true; // how do we indicate we're done?
-                    }
-                    fn(dt, dur)
-
-                    return false;
-                }
-            }
-            // draw the visualization
-            var animations = []
-            var lastBeat = -1
-            function updatecanvas(running, beat, t) {
-                var cvs = elid('dotcanvas')
-                ctx = cvs.getContext('2d')
-                ctx.clearRect(0, 0, cvs.clientWidth, cvs.clientHeight)
-                ctx.fillStyle = '#fff'
-                ctx.strokeStyle = '#000'
-                ctx.fillRect(0, 0, cvs.clientWidth, cvs.clientHeight)
-                for(var i = 0; i < 4; i++) {
-                    ctx.save()
-                    ctx.strokeStyle = '#000'
-                    ctx.translate(i*cvs.clientWidth/4, 0)
-                    ctx.beginPath()
-                    ctx.arc(25, 25, 10, 0, 2*Math.PI)
-                    ctx.closePath()
-                    ctx.stroke()
-                    ctx.restore()
-
-                }
-                if (running && lastBeat != beat) {
-                    animations.push(dotanimation(t, .250, function(dt, dur) {
-                        var offs = beat % 4
-                        ctx.save()
-                        ctx.translate(offs*ctx.canvas.clientWidth/4, 0)
-                        ctx.fillStyle = 'rgba(255,0,0,'+(1.0 - dt/dur)+')'
-                        ctx.beginPath()
-                        ctx.arc(25, 25, 10, 0, 2*Math.PI)
-                        ctx.closePath()
-                        ctx.fill()
-                        ctx.restore()    
-                    }))
-                    lastBeat = beat
-                }
-                var finished = []
-                animations.forEach(function(a, idx) { 
-                    if(a(t)) {
-                        finished.push(idx)
-                    }
-                })
-                animations = animations.filter(function(_, idx) {
-                    return !finished.includes(idx)
-                })
-            }
-            ready(function() {
-                var AudioContext = window.AudioContext || window.webkitAudioContext
-                var ctx = new AudioContext()
-                var gain = ctx.createGain()
-                var beat = -1
-                var tempo = 120.
-                    var nextNoteTime = 0.0
-                var lookahead = .100
-                var running = false
-
-                gain.connect(ctx.destination)
-
-                setupcanvas(elid('dotcanvas'))          
-                updatecanvas(false, 0, 0)
-
-                var tempoDisplay = elid('tempo-disp')
-                tempoDisplay.innerText = tempo
-
-                var tempoIncBtn = elid('tempo-inc')
-                // todo: generalize this 'hold button'
-                elhold(tempoIncBtn, function(evt) {
-                    tempo += 1.0
-                    tempoDisplay.innerText = tempo
-                })
-                tempoDecBtn = elid('tempo-dec')
-                elhold(tempoDecBtn, function(evt) {
-                    tempo -= 1.0
-                    tempoDisplay.innerText = tempo
-                })
-                startBtn = elid('start')
-                elclick(startBtn, function(evt) {
-                    if (running) {
-                        running = false
-                        startBtn.innerText = 'Start'
-                    } else {
-                        // Important! On mobile browsers, you can only
-                        // resume (start) the audio context in response
-                        // to a user-initiated event like a button click
-                        ctx.resume()
-                        running = true
-                        nextNoteTime = ctx.currentTime
-                        beat = -1
-                        startBtn.innerText = 'Stop'
-
-                    }
-                })
-                /**
-                    * @param AudioContext ctx - The AudioContext
-                    * @param AudioNode dest - The destination node
-                    * @param float time - When should the beep happen in `ctx`s timeline?
-                    * @param boolean high - Is this a 'high' (beginning of bar) beep?
-                    */
-                    function beep(ctx, dest, time, high) {
-                        var osc = ctx.createOscillator()
-                        var gain = ctx.createGain()
-
-                        var endT = time + 60.0/tempo/2.0
-
-                        osc.connect(gain)
-                        // use the gain node as an envelope to give us a little
-                        // 30 millisecond attack and then fade out to silence to avoid
-                        // a discontinuity at the end of the note
-                        gain.gain.setValueAtTime(1.0, time)
-                        gain.gain.linearRampToValueAtTime(0.6, time + .030)
-                        gain.gain.linearRampToValueAtTime(0.0001, endT)
-                        gain.connect(dest)
-                        osc.frequency.setValueAtTime(high ? 880.0 : 440.0, time) 
-                        osc.start(time)
-                        osc.stop(endT)
-                    }
-                setInterval(function() {
-                    // we use a lookahead scheme to schedule the metronome's beats
-                    // see https://www.html5rocks.com/en/tutorials/audio/scheduling/
-                        // for an in-depth explanation.
-                        //
-                        // Note we do this in a while loop to handle the case where multiple
-                    // notes need to be scheduled in the lookahead window, e.g.,
-                        // at very high tempos
-                    var cTime = ctx.currentTime
-                    while(running && nextNoteTime < cTime + lookahead) {
-                        beat++
-                        beep(ctx, gain, nextNoteTime, beat % 4 === 0)
-                        nextNoteTime = nextNoteTime + 60.0/tempo
-
-                    }
-                }, 25)
-
-
-                function update(dt) {
-                    updatecanvas(running, beat, ctx.currentTime)
-                    window.requestAnimationFrame(update)
-                }
-                update()
-            })
-        </script>
-    </body>
 </html>
